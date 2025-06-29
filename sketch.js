@@ -70,11 +70,11 @@ async function setup() {
     textAlign(CENTER, CENTER);
     textSize(24);
     
-    // --- YENİ: Firebase'i Başlatma ve Bekleme ---
+    // --- Firebase'i Başlatma ve Bekleme ---
     try {
         const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
         if (!firebaseConfig) {
-            throw new Error("Firebase config not found!");
+            throw new Error("Firebase config not found! Lütfen ortam değişkenlerini kontrol edin.");
         }
 
         const app = window.firebase.initializeApp(firebaseConfig);
@@ -82,6 +82,7 @@ async function setup() {
         auth = window.firebase.getAuth(app);
         appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
 
+        // Daha güvenilir token kontrolü
         if (typeof __initial_auth_token !== 'undefined' && __initial_auth_token) {
              await window.firebase.signInWithCustomToken(auth, __initial_auth_token);
         } else {
@@ -91,7 +92,7 @@ async function setup() {
 
     } catch (error) {
         console.error("Firebase initialization failed:", error);
-        errorMessage = "Veritabanı bağlantısı kurulamadı.";
+        errorMessage = "Veritabanı bağlantısı kurulamadı.\nLütfen daha sonra tekrar deneyin.";
         currentState = GAME_STATE.ERROR;
         return; // Hata durumunda kurulumu durdur.
     }
@@ -104,13 +105,10 @@ async function setup() {
         if (initData && initData.user) {
             telegramUser = initData.user;
         } else {
-             // Test için sahte kullanıcı verisi (Telegram dışı testler için)
-            telegramUser = { id: 'testuser' + floor(random(1000)), first_name: 'Test', username: 'testuser' };
+            telegramUser = { id: 'local_test_' + floor(random(10000)), first_name: 'Test', username: 'localuser' };
         }
     } else {
-        // Test için sahte kullanıcı verisi (Telegram dışı testler için)
-       telegramUser = { id: 'testuser' + floor(random(1000)), first_name: 'Test', username: 'testuser' };
-
+       telegramUser = { id: 'local_test_' + floor(random(10000)), first_name: 'Test', username: 'localuser' };
     }
     
     // Yüksek skoru yerel depolamadan al
@@ -180,12 +178,14 @@ function draw() {
 
     if (currentState === GAME_STATE.LOADING) {
         fill(255);
+        textSize(24);
         text("Yükleniyor...", width / 2, height / 2);
         return;
     }
     
     if (currentState === GAME_STATE.ERROR) {
         fill(255, 100, 100);
+        textSize(20);
         text(errorMessage, width / 2, height / 2);
         return;
     }
@@ -217,11 +217,9 @@ function draw() {
     }
 }
 
-// --- Yeni ve Güncellenmiş Fonksiyonlar ---
-
 async function saveHighScore() {
     if (!db || !telegramUser) {
-        console.log("Firestore or user data not available, score not saved.");
+        console.log("Firestore veya kullanıcı verisi yok, skor kaydedilemedi.");
         return;
     }
 
@@ -234,21 +232,21 @@ async function saveHighScore() {
             if (score > docSnap.data().score) {
                 await window.firebase.setDoc(docRef, {
                     score: floor(score),
-                    userName: telegramUser.first_name || telegramUser.username,
+                    userName: telegramUser.first_name || telegramUser.username || `user-${telegramUser.id}`,
                     userId: telegramUser.id
                 }, { merge: true });
-                console.log("High score updated!");
+                console.log("Yüksek skor güncellendi!");
             }
         } else {
             await window.firebase.setDoc(docRef, {
                 score: floor(score),
-                userName: telegramUser.first_name || telegramUser.username,
+                userName: telegramUser.first_name || telegramUser.username || `user-${telegramUser.id}`,
                 userId: telegramUser.id
             });
-            console.log("New score saved!");
+            console.log("Yeni skor kaydedildi!");
         }
     } catch (error) {
-        console.error("Error saving score: ", error);
+        console.error("Skor kaydedilirken hata oluştu: ", error);
     }
 }
 
@@ -259,19 +257,21 @@ async function showLeaderboard() {
 
     leaderboard = []; 
     try {
+        // --- GÜNCELLENMİŞ SORGULAMA ---
+        // Veritabanından skorları büyükten küçüğe doğru sıralayarak en iyi 10 tanesini çekiyoruz.
         const q = window.firebase.query(
-            window.firebase.collection(db, `artifacts/${appId}/public/data/leaderboard`)
+            window.firebase.collection(db, `artifacts/${appId}/public/data/leaderboard`),
+            window.firebase.orderBy("score", "desc"),
+            window.firebase.limit(10)
         );
+
         const querySnapshot = await window.firebase.getDocs(q);
         querySnapshot.forEach((doc) => {
             leaderboard.push(doc.data());
         });
         
-        leaderboard.sort((a, b) => b.score - a.score);
-        leaderboard = leaderboard.slice(0, 10);
-        
     } catch (error) {
-        console.error("Error getting leaderboard: ", error);
+        console.error("Liderlik tablosu alınırken hata: ", error);
         errorMessage = "Skor tablosu yüklenemedi.";
         currentState = GAME_STATE.ERROR;
         return;
@@ -290,12 +290,16 @@ function displayLeaderboard() {
 
     textSize(18);
     let yPos = 100;
-    leaderboard.forEach((entry, index) => {
-        let displayName = entry.userName || `Kullanıcı #${entry.userId}`;
-        let displayText = `${index + 1}. ${displayName}: ${entry.score}`;
-        text(displayText, width / 2, yPos);
-        yPos += 30;
-    });
+    if (leaderboard.length === 0) {
+        text("Henüz kimse oynamamış!", width/2, height/2);
+    } else {
+        leaderboard.forEach((entry, index) => {
+            let displayName = entry.userName || `Kullanıcı #${entry.userId}`;
+            let displayText = `${index + 1}. ${displayName}: ${entry.score}`;
+            text(displayText, width / 2, yPos);
+            yPos += 30;
+        });
+    }
 }
 
 function showGameOver() {
@@ -341,11 +345,11 @@ function displayUI() {
         textAlign(CENTER, TOP);
         textSize(16);
         let displayName = telegramUser.first_name || telegramUser.username || `Kullanıcı #${telegramUser.id}`;
-        text(`Merhaba, ${displayName}!`, width / 2, 10);
+        text(`Hoş geldin, ${displayName}!`, width / 2, 10);
     }
 }
 
-// Diğer oyun fonksiyonları aynı kalır...
+// Diğer oyun fonksiyonları ve Platform sınıfı aynı kalır...
 class Platform {
     constructor(x, y, w, type) {
         this.x = x;
@@ -364,7 +368,6 @@ class Platform {
         if (this.type === "ghost" && !this.isGhostActive && currentState === GAME_STATE.PLAYING) {
             return;
         }
-
         noStroke();
         if (this.type === "normal") {
             fill(60, 180, 70);
@@ -375,15 +378,10 @@ class Platform {
         } else if (this.type === "spring") {
             fill(220, 220, 60);
         } else if (this.type === "ghost") {
-            if (currentState === GAME_STATE.PLAYING) {
-                let alpha = map(this.ghostTimer, 0, this.ghostDuration, 255, 0);
-                fill(180, 180, 180, alpha);
-            } else {
-                fill(255, 255, 255, 150);
-            }
+            let alpha = currentState === GAME_STATE.PLAYING ? map(this.ghostTimer, 0, this.ghostDuration, 255, 0) : 150;
+            fill(180, 180, 180, alpha);
         }
         rect(this.x, this.y, this.width, this.height, 5);
-
         if (this.type === "spiked") {
             fill(180, 40, 40);
             for (let i = 0; i < this.width / 15; i++) {
@@ -402,7 +400,6 @@ class Platform {
                 this.moveDir *= -1;
             }
         }
-        
         if (this.type === "ghost" && this.isGhostActive && currentState === GAME_STATE.PLAYING) {
             this.ghostTimer--;
             if (this.ghostTimer <= 0) {
@@ -413,13 +410,9 @@ class Platform {
 }
 
 function handlePlayerInput() {
-    if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) {
-        player.vx = -PLAYER_SPEED;
-    } else if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) {
-        player.vx = PLAYER_SPEED;
-    } else {
-        player.vx = 0;
-    }
+    if (keyIsDown(LEFT_ARROW) || keyIsDown(65)) { player.vx = -PLAYER_SPEED; } 
+    else if (keyIsDown(RIGHT_ARROW) || keyIsDown(68)) { player.vx = PLAYER_SPEED; } 
+    else { player.vx = 0; }
 }
 
 function updatePlayer() {
@@ -427,31 +420,19 @@ function updatePlayer() {
         player.popAnimationTimer++;
         if (player.popAnimationTimer >= player.popAnimationDuration) {
             currentState = GAME_STATE.GAMEOVER;
-            select('#restartButton').show();
-            select('#leaderboardButton').show();
         }
         return;
     }
-
     player.vy += GRAVITY;
     player.y += player.vy;
     player.x += player.vx;
-
-    if (player.x > gameWidth) {
-        player.x = 0;
-    } else if (player.x < 0) {
-        player.x = gameWidth;
-    }
-
+    if (player.x > gameWidth) { player.x = 0; } 
+    else if (player.x < 0) { player.x = gameWidth; }
     if (player.y - gameWorldY > gameHeight + player.radius) {
         if (!player.isPopped) {
             player.isPopped = true;
             if (explodeSound) explodeSound.play();
-             for (let p of platforms) {
-                if (p.type === "ghost") {
-                    p.isGhostActive = true;
-                }
-            }
+            for (let p of platforms) { if (p.type === "ghost") { p.isGhostActive = true; } }
         }
     }
 }
@@ -477,7 +458,6 @@ function updatePlatforms() {
             platforms.splice(i, 1);
         }
     });
-
     while (platforms.length < MAX_PLATFORMS) {
         let highestPlatform = platforms.reduce((prev, current) => (prev.y < current.y) ? prev : current);
         let newY = highestPlatform.y - random(PLATFORM_GAP_MIN, PLATFORM_GAP_MAX);
@@ -488,27 +468,16 @@ function updatePlatforms() {
 function generatePlatformsAtY(yPos) {
     let randType = random();
     let type;
-    
-    if (randType < 0.15) {
-        type = "spiked";
-    } else if (randType < 0.35) {
-        type = "moving";
-    } else if (randType < 0.50) {
-        type = "spring";
-    } else if (randType < 0.65) {
-        type = "ghost";
-    } else {
-        type = "normal";
-    }
-
+    if (randType < 0.15) { type = "spiked"; } 
+    else if (randType < 0.35) { type = "moving"; } 
+    else if (randType < 0.50) { type = "spring"; } 
+    else if (randType < 0.65) { type = "ghost"; } 
+    else { type = "normal"; }
     if (type === "spiked") {
         let safeType = random() < 0.8 ? "normal" : "spring";
-        
         let side = random() < 0.5 ? 'left' : 'right';
-        
         let width1 = random(PLATFORM_WIDTH_MIN, PLATFORM_WIDTH_MAX - 20);
         let width2 = random(PLATFORM_WIDTH_MIN, PLATFORM_WIDTH_MAX - 20);
-
         let x1, x2;
         if (side === 'left') {
             x1 = random(0, gameWidth / 2 - width1);
@@ -517,10 +486,8 @@ function generatePlatformsAtY(yPos) {
             x1 = random(gameWidth / 2, gameWidth - width1);
             x2 = random(0, gameWidth / 2 - width2);
         }
-        
         platforms.push(new Platform(x1, yPos, width1, type));
         platforms.push(new Platform(x2, yPos - random(10, 40), width2, safeType));
-
     } else { 
         let newX = random(0, gameWidth - PLATFORM_WIDTH_MIN);
         let newWidth = random(PLATFORM_WIDTH_MIN, PLATFORM_WIDTH_MAX);
@@ -535,10 +502,7 @@ function drawPlatforms() {
 }
 
 function handleCollisions() {
-    if (player.isPopped || player.vy < 0) {
-        return;
-    }
-
+    if (player.isPopped || player.vy < 0) { return; }
     for (let platform of platforms) {
         if (
             player.x > platform.x - player.radius &&
@@ -551,16 +515,13 @@ function handleCollisions() {
                 if (explodeSound) explodeSound.play();
                 return;
             }
-
             if (platform.type === "ghost") {
                 if (platform.isGhostActive) continue;
                 platform.isGhostActive = true;
                 platform.ghostTimer = platform.ghostDuration;
             }
-
             player.vy = JUMP_FORCE;
             if (jumpSound) jumpSound.play();
-
             if (platform.type === "spring") {
                 player.vy = SPRING_BOOST;
                 if (springSound) springSound.play();
