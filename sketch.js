@@ -72,10 +72,11 @@ async function setup() {
     
     // --- Firebase'i Başlatma ve Bekleme ---
     try {
-        const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
-        if (!firebaseConfig) {
+        // Ortam değişkenlerini kontrol et
+        if (typeof __firebase_config === 'undefined' || !__firebase_config) {
             throw new Error("Firebase config not found! Lütfen ortam değişkenlerini kontrol edin.");
         }
+        const firebaseConfig = JSON.parse(__firebase_config);
 
         const app = window.firebase.initializeApp(firebaseConfig);
         db = window.firebase.getFirestore(app);
@@ -185,7 +186,8 @@ function draw() {
     
     if (currentState === GAME_STATE.ERROR) {
         fill(255, 100, 100);
-        textSize(20);
+        textSize(18);
+        textAlign(CENTER, CENTER);
         text(errorMessage, width / 2, height / 2);
         return;
     }
@@ -257,8 +259,7 @@ async function showLeaderboard() {
 
     leaderboard = []; 
     try {
-        // --- GÜNCELLENMİŞ SORGULAMA ---
-        // Veritabanından skorları büyükten küçüğe doğru sıralayarak en iyi 10 tanesini çekiyoruz.
+        // --- GÜNCELLENMİŞ VE DAHA VERİMLİ SORGULAMA ---
         const q = window.firebase.query(
             window.firebase.collection(db, `artifacts/${appId}/public/data/leaderboard`),
             window.firebase.orderBy("score", "desc"),
@@ -272,7 +273,7 @@ async function showLeaderboard() {
         
     } catch (error) {
         console.error("Liderlik tablosu alınırken hata: ", error);
-        errorMessage = "Skor tablosu yüklenemedi.";
+        errorMessage = "Skor tablosu yüklenemedi.\nFirebase index'ini kontrol ettiniz mi?";
         currentState = GAME_STATE.ERROR;
         return;
     }
