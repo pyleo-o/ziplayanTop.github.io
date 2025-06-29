@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <!-- Mobil cihazlarda doğru görüntüleme için viewport meta etiketi -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
+    <title>Gökyüzü Basamak Oyunu</title>
+    <!-- Stil dosyanızı bağlama -->
+    <link rel="stylesheet" href="style.css">
+    
+    <!-- 1. Telegram Web App API betiği -->
+    <!-- Bu, oyununuzun Telegram uygulaması içindeki özelliklere erişmesini sağlar. -->
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+
+    <!-- 2. Firebase SDK Betikleri -->
+    <!-- Bu modül, Firebase servislerini (Firestore, Auth) projenize dahil eder. -->
+    <!-- 'window.firebase' nesnesi üzerinden sketch.js dosyasından erişilecektir. -->
+    <script type="module">
+        // Gerekli Firebase fonksiyonlarını import et
+        import { initializeApp } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-app.js";
+        import { getFirestore, doc, getDoc, setDoc, collection, getDocs, query, limit, orderBy } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-firestore.js";
+        import { getAuth, signInAnonymously, signInWithCustomToken } from "https://www.gstatic.com/firebasejs/11.6.1/firebase-auth.js";
+        
+        // Bu fonksiyonları p5.js kodunda kullanmak üzere global 'window' nesnesine ata
+        window.firebase = {
+            initializeApp,
+            getFirestore,
+            doc,
+            getDoc,
+            setDoc,
+            collection,
+            getDocs,
+            query,
+            limit,
+            orderBy,
+            getAuth,
+            signInAnonymously,
+            signInWithCustomToken
+        };
+    </script>
+</head>
+<body>
+    <h1>Gökyüzü Basamak Oyunu</h1>
+    <!-- p5.js canvas'ının ve butonların ekleneceği ana konteyner -->
+    <div id="game-container"></div>
+
+    <!-- 3. p5.js Kütüphaneleri -->
+    <script src="p5.min.js"></script>
+    <script src="p5.sound.min.js"></script>
+    
+    <!-- 4. Ana Oyun Kodunuz -->
+    <!-- Bu betik en sonda yüklenmeli çünkü yukarıdaki kütüphaneleri kullanır -->
+    <script src="sketch.js"></script>
+</body>
+</html>
